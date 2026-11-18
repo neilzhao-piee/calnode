@@ -1452,6 +1452,36 @@
 				"description": "Paid event types will stop being bookable.",
 				"confirm": "Remove"
 			},
+			"connect": {
+				"title": "Pay hosts directly (Stripe Connect)",
+				"subtitle": "Each paid booking is charged on the assigned host's own Stripe account and settles there, with no platform fee. Unconnected hosts keep settling on this instance's account.",
+				"enable": "Pay hosts directly",
+				"enableHint": "While off, every paid booking settles on the Stripe account configured above. Bookings already paid are always refunded on the account that received them.",
+				"empty": "No hosts connected yet. Their paid bookings currently settle on the platform account.",
+				"pickHost": "Choose a host…",
+				"add": "Connect host",
+				"onboard": "Finish onboarding",
+				"unlink": "Disconnect",
+				"unlinkTitle": "Disconnect this host?",
+				"unlinkDescription": "Their future paid bookings settle on the platform account instead. Money already collected on their Stripe account is not moved.",
+				"unlinkConfirm": "Disconnect",
+				"refresh": "Refresh status",
+				"statusReady": "Receiving money",
+				"statusOnboarding": "Onboarding incomplete",
+				"statusError": "Status unavailable",
+				"needsDetails": "Stripe needs more details before this account can receive money.",
+				"toast": {
+					"modeOn": "Paid bookings will now settle on each host's connected account",
+					"modeOff": "Paid bookings will settle on this Stripe account again",
+					"created": "Connected account created — finish onboarding in the tab Stripe opened",
+					"unlinked": "Host disconnected; their future bookings settle on the platform account",
+					"returned": "Welcome back — refresh status to see whether onboarding completed"
+				},
+				"error": {
+					"load": "Could not load connected accounts",
+					"save": "Could not update Stripe Connect settings"
+				}
+			},
 			"toast": {
 				"saved": "Saved — set a price on an event type to start charging",
 				"disconnected": "Stripe disconnected"

@@ -237,6 +237,25 @@ export type StripeSettings = {
 	configured: boolean; // can take a payment AND verify the confirming webhook
 	/** The endpoint to register in the Stripe dashboard. */
 	webhook_url: string;
+	/** Direct charges on: paid bookings settle on each host's connected account. */
+	connect_enabled: boolean;
+};
+
+export type StripeConnectAccount = {
+	user_id: string;
+	user_name: string;
+	user_email: string;
+	account_id: string;
+	charges_enabled: boolean;
+	payouts_enabled: boolean;
+	details_submitted: boolean;
+	past_due?: string[];
+	status_error?: string;
+};
+
+export type StripeConnectList = {
+	accounts: StripeConnectAccount[];
+	enabled: boolean;
 };
 
 export type LLMSettings = {

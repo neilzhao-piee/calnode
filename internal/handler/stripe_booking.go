@@ -15,10 +15,19 @@ const checkoutHoldWindow = 31 * time.Minute
 
 // startBookingCheckout creates a payment session for a held (pending) booking, marks the
 // booking pending_payment, and returns the hosted checkout URL to redirect the booker to.
+// The assigned host is read back from the booking row (it is the routing decision's
+// output — round robin may have picked anyone). With Connect enabled and that host
+// onboarded, the charge is a direct charge settling on the host's connected account;
+// otherwise it settles on the platform account (pre-Connect behavior).
 func (h *Handler) startBookingCheckout(ctx context.Context, provider payments.Provider, bookingID string, priceCents int, currency, productName, slug, email string) (string, error) {
 	if currency == "" {
 		currency = "usd"
 	}
+	var hostID string
+	if err := h.db.QueryRowContext(ctx, `SELECT host_id FROM bookings WHERE id = ?`, bookingID).Scan(&hostID); err != nil {
+		return "", err
+	}
+	payoutAccount := h.hostPayoutAccount(ctx, hostID)
 	base := h.publicURL()
 	sess, err := provider.CreateCheckout(ctx, payments.CheckoutRequest{
 		AmountMinor:   int64(priceCents),
@@ -26,18 +35,20 @@ func (h *Handler) startBookingCheckout(ctx context.Context, provider payments.Pr
 		ProductName:   productName,
 		CustomerEmail: email,
 		// Stripe substitutes {CHECKOUT_SESSION_ID}; the page shows a "payment received" banner.
-		SuccessURL: base + "/book/" + slug + "?paid=1&session_id={CHECKOUT_SESSION_ID}",
-		CancelURL:  base + "/book/" + slug,
-		ExpiresAt:  time.Now().Add(checkoutHoldWindow),
-		Metadata:   map[string]string{"booking_id": bookingID},
+		SuccessURL:    base + "/book/" + slug + "?paid=1&session_id={CHECKOUT_SESSION_ID}",
+		CancelURL:     base + "/book/" + slug,
+		ExpiresAt:     time.Now().Add(checkoutHoldWindow),
+		Metadata:      map[string]string{"booking_id": bookingID},
+		PayoutAccount: payoutAccount,
 	})
 	if err != nil {
 		return "", err
 	}
 	if _, err := h.db.ExecContext(ctx,
-		`UPDATE bookings SET payment_status = 'pending', payment_provider = ?, payment_session_id = ?
+		`UPDATE bookings SET payment_status = 'pending', payment_provider = ?, payment_session_id = ?,
+		     payment_account = ?
 		 WHERE id = ?`,
-		provider.Name(), sess.ID, bookingID); err != nil {
+		provider.Name(), sess.ID, payoutAccount, bookingID); err != nil {
 		return "", err
 	}
 	return sess.URL, nil
@@ -153,10 +164,10 @@ func (h *Handler) refundBookingPayment(ctx context.Context, bookingID string) {
 	if provider == nil || !provider.Capabilities().Refunds {
 		return
 	}
-	var paymentRef string
+	var paymentRef, paymentAccount string
 	if err := h.db.QueryRowContext(ctx,
-		`SELECT COALESCE(payment_ref, '') FROM bookings WHERE id = ?`,
-		bookingID).Scan(&paymentRef); err != nil {
+		`SELECT COALESCE(payment_ref, ''), COALESCE(payment_account, '') FROM bookings WHERE id = ?`,
+		bookingID).Scan(&paymentRef, &paymentAccount); err != nil {
 		return
 	}
 	if paymentRef == "" {
@@ -174,7 +185,7 @@ func (h *Handler) refundBookingPayment(ctx context.Context, bookingID string) {
 	if n, _ := claimed.RowsAffected(); n == 0 {
 		return // already refunded/refunding, or never paid
 	}
-	if err := provider.Refund(ctx, payments.RefundRequest{PaymentRef: paymentRef, IdempotencyKey: "refund:" + bookingID}); err != nil {
+	if err := provider.Refund(ctx, payments.RefundRequest{PaymentRef: paymentRef, IdempotencyKey: "refund:" + bookingID, PayoutAccount: paymentAccount}); err != nil {
 		h.logger.ErrorContext(ctx, "stripe: refund on cancel", "error", err, "booking_id", bookingID)
 		// Revert the claim so a later cancel retries; the money was not moved.
 		// If the revert itself fails, the row stays 'refunding' — still safe:

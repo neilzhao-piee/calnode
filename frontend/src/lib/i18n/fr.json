@@ -1452,6 +1452,36 @@
 				"description": "Les types de rendez-vous payants ne pourront plus être réservés.",
 				"confirm": "Retirer"
 			},
+			"connect": {
+				"title": "Verser directement aux hôtes (Stripe Connect)",
+				"subtitle": "Chaque rendez-vous payant est facturé sur le compte Stripe propre à l'hôte attribué et y est crédité, sans commission. Les hôtes non connectés restent crédités sur le compte de cette instance.",
+				"enable": "Verser directement aux hôtes",
+				"enableHint": "Tant que c'est désactivé, chaque rendez-vous payant est crédité sur le compte Stripe configuré ci-dessus. Les paiements déjà encaissés sont toujours remboursés sur le compte qui les a reçus.",
+				"empty": "Aucun hôte connecté pour l'instant. Leurs rendez-vous payants sont actuellement crédités sur le compte de la plateforme.",
+				"pickHost": "Choisir un hôte…",
+				"add": "Connecter un hôte",
+				"onboard": "Finaliser l'activation",
+				"unlink": "Déconnecter",
+				"unlinkTitle": "Déconnecter cet hôte ?",
+				"unlinkDescription": "Ses futurs rendez-vous payants seront crédités sur le compte de la plateforme. L'argent déjà encaissé sur son compte Stripe n'est pas transféré.",
+				"unlinkConfirm": "Déconnecter",
+				"refresh": "Actualiser le statut",
+				"statusReady": "Reçoit les paiements",
+				"statusOnboarding": "Activation incomplète",
+				"statusError": "Statut indisponible",
+				"needsDetails": "Stripe a besoin d'informations supplémentaires avant que ce compte puisse recevoir des paiements.",
+				"toast": {
+					"modeOn": "Les rendez-vous payants seront désormais crédités sur le compte connecté de chaque hôte",
+					"modeOff": "Les rendez-vous payants seront de nouveau crédités sur ce compte Stripe",
+					"created": "Compte connecté créé — finalisez l'activation dans l'onglet ouvert par Stripe",
+					"unlinked": "Hôte déconnecté ; ses futurs rendez-vous seront crédités sur le compte de la plateforme",
+					"returned": "Bon retour — actualisez le statut pour voir si l'activation est terminée"
+				},
+				"error": {
+					"load": "Impossible de charger les comptes connectés",
+					"save": "Impossible de mettre à jour les paramètres Stripe Connect"
+				}
+			},
 			"toast": {
 				"saved": "Enregistré — définissez un prix sur un type de rendez-vous pour commencer à facturer",
 				"disconnected": "Stripe déconnecté"

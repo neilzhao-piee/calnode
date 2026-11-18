@@ -55,6 +55,7 @@ func (p *StripeProvider) CreateCheckout(ctx context.Context, req CheckoutRequest
 		CancelURL:     req.CancelURL,
 		ExpiresAt:     req.ExpiresAt,
 		Metadata:      req.Metadata,
+		StripeAccount: req.PayoutAccount,
 	})
 	if err != nil {
 		return nil, err
@@ -62,8 +63,8 @@ func (p *StripeProvider) CreateCheckout(ctx context.Context, req CheckoutRequest
 	return normalizeSession(sess), nil
 }
 
-func (p *StripeProvider) GetSession(ctx context.Context, sessionID string) (*CheckoutSession, error) {
-	sess, err := p.client.GetCheckoutSession(ctx, sessionID)
+func (p *StripeProvider) GetSession(ctx context.Context, sessionID, payoutAccount string) (*CheckoutSession, error) {
+	sess, err := p.client.GetCheckoutSession(ctx, sessionID, payoutAccount)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +90,7 @@ func (p *StripeProvider) ParseWebhook(payload []byte, headers http.Header, now t
 		return &Event{Kind: EventOther}, nil
 	}
 
-	event := &Event{Kind: kind}
+	event := &Event{Kind: kind, PayoutAccount: ev.Account}
 	// A completed/expired session should carry one; if the payload cannot be decoded we
 	// still return the kind so the handler can decide, exactly as before.
 	if sess, serr := ev.Session(); serr == nil && sess != nil {
@@ -99,7 +100,41 @@ func (p *StripeProvider) ParseWebhook(payload []byte, headers http.Header, now t
 }
 
 func (p *StripeProvider) Refund(ctx context.Context, req RefundRequest) error {
-	return p.client.Refund(ctx, req.PaymentRef, req.IdempotencyKey)
+	return p.client.Refund(ctx, req.PaymentRef, req.IdempotencyKey, req.PayoutAccount)
+}
+
+// --- Connect (direct charges) ------------------------------------------------
+//
+// These are Stripe-specific extensions outside the payments.Provider seam, the
+// same way WebhookConfigured/PublishableKey are: the booking flow never needs
+// them, only the admin onboarding UI. The handler type-asserts to *StripeProvider
+// to reach them.
+
+// ConnectCreateAccount registers a connected account for a host and returns its id.
+func (p *StripeProvider) ConnectCreateAccount(ctx context.Context, idempotencyKey, businessName, businessURL string) (string, error) {
+	acct, err := p.client.CreateConnectAccount(ctx, stripe.ConnectAccountParams{
+		Type:            "express",
+		ProductCategory: "", // host supplies during onboarding
+		IdempotencyKey:  idempotencyKey,
+	}, businessName, businessURL)
+	if err != nil {
+		return "", err
+	}
+	return acct.ID, nil
+}
+
+// ConnectAccountLink returns the Stripe-hosted onboarding URL for a connected account.
+func (p *StripeProvider) ConnectAccountLink(ctx context.Context, accountID, refreshURL, returnURL string) (string, error) {
+	return p.client.CreateAccountLink(ctx, accountID, refreshURL, returnURL)
+}
+
+// ConnectAccountStatus reports whether a connected account can take money yet.
+func (p *StripeProvider) ConnectAccountStatus(ctx context.Context, accountID string) (chargesEnabled, payoutsEnabled, detailsSubmitted bool, pastDue []string, err error) {
+	st, err := p.client.GetConnectAccount(ctx, accountID)
+	if err != nil {
+		return false, false, false, nil, err
+	}
+	return st.ChargesEnabled, st.PayoutsEnabled, st.DetailsSubmitted, st.Requirements.PastDue, nil
 }
 
 // normalizeSession maps Stripe's session onto the neutral shape. PaymentStatus is a

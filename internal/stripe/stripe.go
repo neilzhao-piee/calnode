@@ -1,7 +1,9 @@
 // Package stripe is a minimal, dependency-free client for the few Stripe REST calls the
 // paid-booking flow needs: create a Checkout Session, verify a webhook signature, fetch a
-// session, and refund a payment. One Stripe account per instance (instance-per-tenant), so
-// there's no Connect/marketplace logic — the workspace keeps 100% of each charge.
+// session, and refund a payment. By default the instance's own account keeps 100% of each
+// charge. With Connect enabled, per-host connected accounts take over: pass the account id
+// as StripeAccount and the call carries the Stripe-Account header, so a direct charge
+// lands on the connected account (platform application fee 0) — see connect.go.
 package stripe
 
 import (
@@ -73,6 +75,9 @@ type CheckoutParams struct {
 	CancelURL     string
 	ExpiresAt     time.Time         // session expiry (Stripe requires 30 min – 24 h from now)
 	Metadata      map[string]string // e.g. booking_id — echoed back on the webhook
+	// StripeAccount routes the charge to a connected account (Connect direct
+	// charge: funds settle to that account, platform fee 0). Empty = platform.
+	StripeAccount string
 }
 
 // CheckoutSession is the subset of a Stripe Checkout Session we use.
@@ -109,16 +114,17 @@ func (c *Client) CreateCheckoutSession(ctx context.Context, p CheckoutParams) (*
 	}
 
 	var sess CheckoutSession
-	if err := c.do(ctx, http.MethodPost, "/v1/checkout/sessions", form, &sess); err != nil {
+	if err := c.doAcct(ctx, http.MethodPost, "/v1/checkout/sessions", form, "", p.StripeAccount, &sess); err != nil {
 		return nil, err
 	}
 	return &sess, nil
 }
 
 // GetCheckoutSession fetches a session by id (used by the success page to confirm payment).
-func (c *Client) GetCheckoutSession(ctx context.Context, id string) (*CheckoutSession, error) {
+// A session created on a connected account must be fetched on that same account.
+func (c *Client) GetCheckoutSession(ctx context.Context, id, stripeAccount string) (*CheckoutSession, error) {
 	var sess CheckoutSession
-	if err := c.do(ctx, http.MethodGet, "/v1/checkout/sessions/"+url.PathEscape(id), nil, &sess); err != nil {
+	if err := c.doAcct(ctx, http.MethodGet, "/v1/checkout/sessions/"+url.PathEscape(id), nil, "", stripeAccount, &sess); err != nil {
 		return nil, err
 	}
 	return &sess, nil
@@ -126,8 +132,9 @@ func (c *Client) GetCheckoutSession(ctx context.Context, id string) (*CheckoutSe
 
 // Refund issues a full refund for a PaymentIntent. A blank id is a no-op.
 // idempotencyKey (e.g. "refund:<booking_id>") makes retries safe: Stripe returns
-// the original refund instead of creating a second one.
-func (c *Client) Refund(ctx context.Context, paymentIntentID, idempotencyKey string) error {
+// the original refund instead of creating a second one. A direct-charge PaymentIntent
+// lives on the connected account, so refund it there (stripeAccount).
+func (c *Client) Refund(ctx context.Context, paymentIntentID, idempotencyKey, stripeAccount string) error {
 	if paymentIntentID == "" {
 		return nil
 	}
@@ -136,15 +143,14 @@ func (c *Client) Refund(ctx context.Context, paymentIntentID, idempotencyKey str
 	var out struct {
 		ID string `json:"id"`
 	}
-	return c.doWithKey(ctx, http.MethodPost, "/v1/refunds", form, idempotencyKey, &out)
+	return c.doAcct(ctx, http.MethodPost, "/v1/refunds", form, idempotencyKey, stripeAccount, &out)
 }
 
-// do performs a Stripe API call (form-encoded for POST) and decodes the JSON response.
-func (c *Client) do(ctx context.Context, method, path string, form url.Values, out any) error {
-	return c.doWithKey(ctx, method, path, form, "", out)
-}
-
-func (c *Client) doWithKey(ctx context.Context, method, path string, form url.Values, idempotencyKey string, out any) error {
+// doAcct is the single choke point for Stripe HTTP calls. stripeAccount (when set) is
+// sent as the Stripe-Account header: the call then acts on behalf of that connected
+// account (Connect direct charge — the charge, the Checkout Session and any refund are
+// owned by the connected account, and the platform collects no application fee).
+func (c *Client) doAcct(ctx context.Context, method, path string, form url.Values, idempotencyKey, stripeAccount string, out any) error {
 	var body io.Reader
 	if form != nil {
 		body = strings.NewReader(form.Encode())
@@ -159,6 +165,9 @@ func (c *Client) doWithKey(ctx context.Context, method, path string, form url.Va
 	}
 	if idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+	if stripeAccount != "" {
+		req.Header.Set("Stripe-Account", stripeAccount)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -192,7 +201,11 @@ func (c *Client) doWithKey(ctx context.Context, method, path string, form url.Va
 type Event struct {
 	ID   string `json:"id"`
 	Type string `json:"type"`
-	Data struct {
+	// Account is the connected account an event belongs to ("acct_…"): with Connect
+	// direct charges, checkout/payment events are emitted on the connected account and
+	// arrive at the platform endpoint tagged. Empty for platform-owned events.
+	Account string `json:"account"`
+	Data    struct {
 		Object json.RawMessage `json:"object"`
 	} `json:"data"`
 }

@@ -52,10 +52,11 @@ func (h *Handler) GetStripeSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var secretEnc, pubKey, whEnc string
+	var connectEnabled int
 	err := h.db.QueryRowContext(r.Context(), `
-		SELECT stripe_secret_key_enc, stripe_publishable_key, stripe_webhook_secret_enc
+		SELECT stripe_secret_key_enc, stripe_publishable_key, stripe_webhook_secret_enc, stripe_connect_enabled
 		FROM server_settings WHERE id = 1`).
-		Scan(&secretEnc, &pubKey, &whEnc)
+		Scan(&secretEnc, &pubKey, &whEnc, &connectEnabled)
 	if err != nil && err != sql.ErrNoRows {
 		h.logger.ErrorContext(r.Context(), "stripe settings: query", "error", err)
 		h.writeError(w, http.StatusInternalServerError, "internal error")
@@ -68,6 +69,9 @@ func (h *Handler) GetStripeSettings(w http.ResponseWriter, r *http.Request) {
 		// configured = can take a payment AND verify the confirming webhook.
 		"configured":  secretEnc != "" && whEnc != "",
 		"webhook_url": h.stripeWebhookURL(),
+		// connect_enabled: paid bookings settle on each host's connected account
+		// (direct charges, platform fee 0) instead of this instance's account.
+		"connect_enabled": connectEnabled != 0,
 	})
 }
 
@@ -86,10 +90,31 @@ func (h *Handler) PatchStripeSettings(w http.ResponseWriter, r *http.Request) {
 		SecretKey      string  `json:"secret_key"`
 		PublishableKey *string `json:"publishable_key"`
 		WebhookSecret  string  `json:"webhook_secret"`
+		ConnectEnabled *bool   `json:"connect_enabled"`
 		Clear          bool    `json:"clear"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	// Connect toggle is independent of credentials: handle it first and, when it is
+	// the ONLY field, respond without touching keys (a settings-page toggle save).
+	if req.ConnectEnabled != nil {
+		v := 0
+		if *req.ConnectEnabled {
+			v = 1
+		}
+		if _, err := h.db.ExecContext(r.Context(),
+			`UPDATE server_settings SET stripe_connect_enabled = ?, updated_at = datetime('now') WHERE id = 1`, v); err != nil {
+			h.logger.ErrorContext(r.Context(), "stripe settings: connect toggle", "error", err)
+			h.writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		h.logger.InfoContext(r.Context(), "stripe connect enabled flag updated", "enabled", v == 1)
+	}
+	if req.ConnectEnabled != nil && req.SecretKey == "" && req.PublishableKey == nil && req.WebhookSecret == "" && !req.Clear {
+		h.GetStripeSettings(w, r)
 		return
 	}
 

@@ -11,6 +11,7 @@
 	import { createAsyncFlag } from '$lib/async-action.svelte';
 	import { t, tr } from '$lib/i18n';
 	import LinkedText from '$lib/i18n/linked-text.svelte';
+	import StripeConnect from './stripe-connect.svelte';
 
 	const loadingFlag = createAsyncFlag(true);
 	const savingFlag = createAsyncFlag();
@@ -150,6 +151,10 @@
 				{/if}
 			</div>
 		</div>
+
+		{#if settings?.configured}
+			<StripeConnect />
+		{/if}
 	</div>
 {/if}
 

@@ -54,6 +54,12 @@ type CheckoutRequest struct {
 	// Metadata is echoed back on the webhook. Calnode puts booking_id here and relies
 	// on it to join the payment to the booking, so adapters must round-trip it.
 	Metadata map[string]string
+	// PayoutAccount is the provider-side account id that should RECEIVE this money
+	// when it is not the configured account itself (Stripe Connect direct charge:
+	// "acct_…"). Empty means the configured account keeps the charge — the default
+	// and the pre-Connect behavior. Providers that cannot split payouts may treat a
+	// non-empty value as an error.
+	PayoutAccount string
 }
 
 // CheckoutSession is the provider-neutral view of a hosted payment session.
@@ -83,12 +89,19 @@ const (
 type Event struct {
 	Kind    EventKind
 	Session *CheckoutSession // nil when the provider could not include the session
+	// PayoutAccount is the provider account the event belongs to when events for
+	// sub-accounts arrive on the platform endpoint (Stripe sends "acct_…"). Empty
+	// for ordinary events. Informational: the booking join rides on Metadata.
+	PayoutAccount string
 }
 
 // RefundRequest asks for a full refund of one payment.
 type RefundRequest struct {
 	PaymentRef     string // CheckoutSession.PaymentRef
 	IdempotencyKey string // e.g. "refund:<booking_id>"; makes retries safe
+	// PayoutAccount is the account the original charge settled on; where providers
+	// own per-account money (Stripe Connect), the refund must be issued there.
+	PayoutAccount string
 }
 
 // Provider is one payment gateway.
@@ -100,7 +113,11 @@ type Provider interface {
 	Name() string
 	Capabilities() Capabilities
 	CreateCheckout(ctx context.Context, req CheckoutRequest) (*CheckoutSession, error)
-	GetSession(ctx context.Context, sessionID string) (*CheckoutSession, error)
+	// GetSession re-fetches a stored session. payoutAccount is the value the
+	// booking recorded in bookings.payment_account when the session was created:
+	// where a provider scopes objects per account (Stripe Connect), fetching
+	// without it fails. Pass "" for platform-owned sessions.
+	GetSession(ctx context.Context, sessionID, payoutAccount string) (*CheckoutSession, error)
 	// ParseWebhook verifies the provider's signature over payload and normalizes the
 	// event. headers carries the whole request header set because signature header
 	// names differ per provider. A verification failure must return an error, never a
