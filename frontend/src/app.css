@@ -17,8 +17,22 @@
 @custom-variant data-open (&:where([data-state="open"]));
 @custom-variant data-closed (&:where([data-state="closed"]));
 
+/*
+ * Piee brand font — Work Sans (brand strategy §Typography), self-hosted as a
+ * variable font (latin subset, 100–900) so the admin UI never phones home to a
+ * font CDN. Fallbacks keep it legible until the woff2 lands. Booking pages are
+ * framework-free and keep their own stack.
+ */
+@font-face {
+	font-family: "Work Sans";
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url("/admin/fonts/work-sans-var.woff2") format("woff2");
+}
+
 @theme inline {
-	--font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--font-sans: "Work Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
 	--radius-sm: calc(var(--radius) - 4px);
@@ -53,47 +67,58 @@
 	--color-sidebar-border:      var(--sidebar-border);
 }
 
-/* Light theme — zinc/neutral palette */
+/*
+ * Light theme — Piee brand (brand strategy §Colour palette):
+ *   primary   Blue Crayola #3070FA · deep  Cobalt Blue #1C4A9E
+ *   text      Eerie Black  #1D1C1C · white #FFFFFF · tint Non-Photo Blue #A6E8FF
+ * Maximum Yellow Red #FABF5E is the brand's link/highlight colour, but on white
+ * it sits under the WCAG contrast floor as TEXT — so it stays a background/
+ * decoration colour here and link text uses Cobalt Blue instead. Titles keep the
+ * neutral colour: the brand's blue-title rule is marketing typography, and a
+ * dense admin screen painted blue headers reads as a wall of links.
+ */
 :root {
-	--radius: 0.5rem;
+	--radius: 0.75rem;
 
 	--background:           oklch(1 0 0);
-	--foreground:           oklch(0.141 0.005 285.823);
+	--foreground:           oklch(0.228 0.002 17.3);
 	--card:                 oklch(1 0 0);
-	--card-foreground:      oklch(0.141 0.005 285.823);
+	--card-foreground:      oklch(0.228 0.002 17.3);
 	--popover:              oklch(1 0 0);
-	--popover-foreground:   oklch(0.141 0.005 285.823);
-	--primary:              oklch(0.21 0.006 285.885);
-	--primary-foreground:   oklch(0.985 0 0);
+	--popover-foreground:   oklch(0.228 0.002 17.3);
+	--primary:              oklch(0.586 0.217 262.8);
+	--primary-foreground:   oklch(1 0 0);
 	--secondary:            oklch(0.967 0.001 286.375);
-	--secondary-foreground: oklch(0.21 0.006 285.885);
+	--secondary-foreground: oklch(0.228 0.002 17.3);
 	--muted:                oklch(0.967 0.001 286.375);
 	--muted-foreground:     oklch(0.552 0.016 285.938);
-	--accent:               oklch(0.967 0.001 286.375);
-	--accent-foreground:    oklch(0.21 0.006 285.885);
+	--accent:               oklch(0.965 0.02 232);
+	--accent-foreground:    oklch(0.429 0.146 261.2);
 	--destructive:          oklch(0.577 0.245 27.325);
 	--border:               oklch(0.92 0.004 286.32);
 	--input:                oklch(0.80 0.004 286.32);
-	--ring:                 oklch(0.705 0.015 286.067);
+	--ring:                 oklch(0.586 0.217 262.8);
 
-	--sidebar:                    oklch(0.985 0.002 247.839);
-	--sidebar-foreground:         oklch(0.141 0.005 285.823);
-	--sidebar-primary:            oklch(0.21 0.006 285.885);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent:             oklch(0.967 0.001 286.375);
-	--sidebar-accent-foreground:  oklch(0.21 0.006 285.885);
+	--sidebar:                    oklch(0.985 0.004 240);
+	--sidebar-foreground:         oklch(0.228 0.002 17.3);
+	--sidebar-primary:            oklch(0.586 0.217 262.8);
+	--sidebar-primary-foreground: oklch(1 0 0);
+	--sidebar-accent:             oklch(0.965 0.02 232);
+	--sidebar-accent-foreground:  oklch(0.429 0.146 261.2);
 	--sidebar-border:             oklch(0.92 0.004 286.32);
 }
 
 .dark {
+	/* Brand defines light mode only; dark keeps the same blue identity, lit up a
+	   notch so buttons keep contrast against near-black surfaces. */
 	--background:           oklch(0.141 0.005 285.823);
 	--foreground:           oklch(0.985 0 0);
 	--card:                 oklch(0.21 0.006 285.885);
 	--card-foreground:      oklch(0.985 0 0);
 	--popover:              oklch(0.21 0.006 285.885);
 	--popover-foreground:   oklch(0.985 0 0);
-	--primary:              oklch(0.985 0 0);
-	--primary-foreground:   oklch(0.21 0.006 285.885);
+	--primary:              oklch(0.65 0.19 262.8);
+	--primary-foreground:   oklch(0.16 0.01 262);
 	--secondary:            oklch(0.274 0.006 286.033);
 	--secondary-foreground: oklch(0.985 0 0);
 	--muted:                oklch(0.274 0.006 286.033);
@@ -103,12 +128,12 @@
 	--destructive:          oklch(0.704 0.191 22.216);
 	--border:               oklch(1 0 0 / 10%);
 	--input:                oklch(1 0 0 / 15%);
-	--ring:                 oklch(0.552 0.016 285.938);
+	--ring:                 oklch(0.65 0.19 262.8);
 
 	--sidebar:                    oklch(0.21 0.006 285.885);
 	--sidebar-foreground:         oklch(0.985 0 0);
-	--sidebar-primary:            oklch(0.488 0.243 264.376);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
+	--sidebar-primary:            oklch(0.65 0.19 262.8);
+	--sidebar-primary-foreground: oklch(0.16 0.01 262);
 	--sidebar-accent:             oklch(0.274 0.006 286.033);
 	--sidebar-accent-foreground:  oklch(0.985 0 0);
 	--sidebar-border:             oklch(1 0 0 / 10%);
